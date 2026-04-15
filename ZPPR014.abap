@@ -54,7 +54,7 @@ TYPES:
     gstrs TYPE gstrs,       " Data início planejada
     gltrp TYPE gltrp,       " Data fim planejada
     ftrms TYPE ftrms,       " Data início confirmada
-    getrs TYPE getrs,       " Data fim confirmada
+    getrs TYPE afko-getri,  " Data fim real (AFKO-GETRI: Ist-Endtermin)
   END OF ty_ordem,
 
   BEGIN OF ty_marc,
@@ -79,7 +79,7 @@ TYPES:
     gstrs    TYPE gstrs,
     gltrp    TYPE gltrp,
     ftrms    TYPE ftrms,
-    getrs    TYPE getrs,
+    getrs    TYPE afko-getri,  " Data fim real (AFKO-GETRI: Ist-Endtermin)
     gamng    TYPE gamng,
     wemng    TYPE wemng,
     gmein    TYPE meins,
@@ -240,7 +240,7 @@ FORM f_selecionar_ordens.
     afko~gstrs,
     afko~gltrp,
     afko~ftrms,
-    afko~getrs
+    afko~getri  " Data fim real (Ist-Endtermin)
   INTO TABLE @gt_ordens
   FROM afko
   INNER JOIN aufk ON aufk~aufnr  = afko~aufnr
