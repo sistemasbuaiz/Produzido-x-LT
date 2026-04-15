@@ -508,10 +508,7 @@ FORM f_exibir_alv.
     lo_sorts    TYPE REF TO cl_salv_sorts,
     lo_display  TYPE REF TO cl_salv_display_settings,
     lo_funcs    TYPE REF TO cl_salv_functions_list,
-    lo_events   TYPE REF TO cl_salv_events_table,
-    lx_msg      TYPE REF TO cx_salv_msg,
-    lx_exist    TYPE REF TO cx_salv_existing_object,
-    lx_col      TYPE REF TO cx_salv_not_found.
+    lx_msg      TYPE REF TO cx_salv_msg.
 
   TRY.
       cl_salv_table=>factory(
@@ -538,7 +535,7 @@ FORM f_exibir_alv.
   TRY.
       lo_sorts->add_sort( columnname = 'WERKS' ).
       lo_sorts->add_sort( columnname = 'MATNR' ).
-    CATCH cx_salv_not_found cx_salv_existing_object cx_salv_data_error.
+    CATCH cx_salv_not_found cx_salv_data_error cx_salv_msg.
   ENDTRY.
 
   " ---- Configuração de colunas ------------------------------------
