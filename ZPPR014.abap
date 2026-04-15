@@ -50,7 +50,7 @@ TYPES:
     matnr TYPE matnr,       " Material
     gamng TYPE gamng,       " Qtd planejada total
     wemng TYPE wemng,       " Qtd entrada mercadoria (produzida)
-    gmein TYPE gmein,       " Unidade de medida
+    gmein TYPE meins,       " Unidade de medida (data element MEINS)
     gstrs TYPE gstrs,       " Data início planejada
     gltrp TYPE gltrp,       " Data fim planejada
     ftrms TYPE ftrms,       " Data início confirmada
@@ -82,7 +82,7 @@ TYPES:
     getrs    TYPE getrs,
     gamng    TYPE gamng,
     wemng    TYPE wemng,
-    gmein    TYPE gmein,
+    gmein    TYPE meins,
     dzeit    TYPE dzeit,
     lt_real  TYPE i,
     lt_var   TYPE i,
@@ -228,32 +228,34 @@ FORM f_selecionar_ordens.
   " Monta condição de status de sistema via JEST/TJ02T
   " A filtragem por status é feita após a leitura inicial via AFKO/AUFK
 
+  " MATNR e WEMNG ficam em AFPO; WERKS fica em AUFK; datas e GAMNG em AFKO
   SELECT
     afko~aufnr,
     aufk~auart,
-    afko~werks,
-    afko~matnr,
-    afko~gamng,
-    afko~wemng,
-    afko~gmein,
+    aufk~werks,         " Centro (AUFK-WERKS)
+    afpo~matnr,         " Material (AFPO-MATNR)
+    afko~gamng,         " Qtd planejada total (AFKO-GAMNG)
+    afpo~wemng,         " Qtd entrada merc. produzida (AFPO-WEMNG)
+    afpo~gmein,         " Unidade de medida (AFPO-GMEIN)
     afko~gstrs,
     afko~gltrp,
     afko~ftrms,
     afko~getrs
   INTO TABLE @gt_ordens
   FROM afko
-  INNER JOIN aufk ON aufk~aufnr = afko~aufnr
-  INNER JOIN marc ON  marc~matnr = afko~matnr
-                  AND marc~werks = afko~werks
-  INNER JOIN mara ON  mara~matnr = afko~matnr
-  WHERE afko~werks IN @so_werks
-    AND afko~matnr IN @so_matnr
-    AND afko~gstrs IN @so_gstrs
-    AND afko~gltrp IN @so_gltrp
-    AND aufk~aufnr IN @so_aufnr
-    AND aufk~auart IN @so_auart
-    AND mara~mtart IN @so_mtart
-    AND mara~mtart IN ('FERT', 'HALB').   " Somente FERT e HALB
+  INNER JOIN aufk ON aufk~aufnr  = afko~aufnr
+  INNER JOIN afpo ON afpo~aufnr  = afko~aufnr
+  INNER JOIN marc ON  marc~matnr = afpo~matnr
+                  AND marc~werks = aufk~werks
+  INNER JOIN mara ON  mara~matnr = afpo~matnr
+  WHERE aufk~werks   IN @so_werks
+    AND afpo~matnr   IN @so_matnr
+    AND afko~gstrs   IN @so_gstrs
+    AND afko~gltrp   IN @so_gltrp
+    AND aufk~aufnr   IN @so_aufnr
+    AND aufk~auart   IN @so_auart
+    AND mara~mtart   IN @so_mtart
+    AND mara~mtart   IN ('FERT', 'HALB').   " Somente FERT e HALB
 
   IF sy-subrc <> 0.
     MESSAGE 'Nenhuma ordem encontrada com os critérios informados.' TYPE 'S'
