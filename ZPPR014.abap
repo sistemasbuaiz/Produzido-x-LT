@@ -236,7 +236,7 @@ FORM f_selecionar_ordens.
     afpo~matnr,         " Material (AFPO-MATNR)
     afko~gamng,         " Qtd planejada total (AFKO-GAMNG)
     afpo~wemng,         " Qtd entrada merc. produzida (AFPO-WEMNG)
-    afpo~gmein,         " Unidade de medida (AFPO-GMEIN)
+    afko~gmein,         " Unidade de medida (AFKO-GMEIN)
     afko~gstrs,
     afko~gltrp,
     afko~ftrms,
