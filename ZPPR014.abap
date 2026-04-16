@@ -12,22 +12,39 @@ TABLES: afko, afpo.
 
 *&---------------------------------------------------------------------*
 
-TYPES: BEGIN OF ty_alv,
+TYPES: BEGIN OF ty_mseg,
+         aufnr TYPE aufnr,
+         matnr TYPE matnr,
+         werks TYPE werks_d,
+         menge TYPE menge_d,
+       END OF ty_mseg.
 
-         pwerk      TYPE afpo-pwerk,
+TYPES: BEGIN OF ty_afko,
+         aufnr  TYPE aufnr,
+         werks  TYPE werks_d,
+         plnbez TYPE matnr,
+         igmng  TYPE afko-igmng,
+         stlal  TYPE stlal,
+         stlan  TYPE stlan,
+         stlnr  TYPE stlnr,
+       END OF ty_afko.
+
+TYPES: BEGIN OF ty_alv,
+         pwerk      TYPE werks_d,
          aufnr      TYPE aufnr,
-         matnr      TYPE matnr,
+         plnbez     TYPE matnr,
          idnrk      TYPE matnr,
          menge_real TYPE menge_d,
          menge_plan TYPE menge_d,
          diff       TYPE menge_d,
          color      TYPE lvc_t_scol,
-
        END OF ty_alv.
 
 *&---------------------------------------------------------------------*
 
-DATA: it_alv TYPE TABLE OF ty_alv.
+DATA: it_alv  TYPE TABLE OF ty_alv,
+      it_mseg TYPE TABLE OF ty_mseg,
+      it_afko TYPE TABLE OF ty_afko.
 
 *&---------------------------------------------------------------------*
 
@@ -97,37 +114,175 @@ START-OF-SELECTION.
 
 FORM f_select_data.
 
-  SELECT a~aufnr,
-         b~matnr,
-         b~pwerk,
-         c~matnr AS idnrk,
-         c~bdmng AS menge_plan,
-         SUM( d~menge ) AS menge_real
-    FROM afko AS a
-    INNER JOIN afpo AS b ON a~aufnr = b~aufnr
-    INNER JOIN resb AS c ON a~aufnr = c~aufnr
-    INNER JOIN mseg AS d ON a~aufnr = d~aufnr AND c~matnr = d~matnr
-    INTO CORRESPONDING FIELDS OF TABLE @it_alv
-    WHERE a~aufnr IN @s_aufnr
-      AND a~gstrp IN @s_gstrp
-      AND b~matnr IN @s_matnr
-      AND b~pwerk IN ( 'BAMO', 'CDTR', 'CFMA' )
-    GROUP BY a~aufnr, b~matnr, b~pwerk, c~matnr, c~bdmng.
+  " Etapa 1: Movimentos reais na MSEG sem referência de estorno (LFBNR vazio)
+  " Documentos com LFBNR preenchido são passivos a estorno e devem ser ignorados
+  SELECT aufnr,
+         matnr,
+         werks,
+         SUM( menge ) AS menge
+    FROM mseg
+    INTO TABLE @it_mseg
+    WHERE aufnr IN @s_aufnr
+      AND werks  IN ( 'BAMO', 'CDTR', 'CFMA' )
+      AND lfbnr  =  @space
+    GROUP BY aufnr, matnr, werks.
 
-  IF sy-subrc IS NOT INITIAL.
-    MESSAGE 'Dados não encontrados para esse parâmentro' TYPE 'E' DISPLAY LIKE 'S'.
+  IF sy-subrc IS NOT INITIAL OR it_mseg IS INITIAL.
+    MESSAGE 'Dados não encontrados na MSEG para esse parâmetro' TYPE 'E' DISPLAY LIKE 'S'.
     STOP.
   ENDIF.
 
-*&---------------------------------------------------------------------*
+  " Etapa 2: Monta range de ordens únicas a partir dos documentos encontrados na MSEG
+  DATA lt_aufnr TYPE RANGE OF aufnr.
 
-  LOOP AT it_alv ASSIGNING FIELD-SYMBOL(<fs_alv>).
+  LOOP AT it_mseg ASSIGNING FIELD-SYMBOL(<fs_m>).
+    APPEND VALUE #( sign = 'I' option = 'EQ' low = <fs_m>-aufnr ) TO lt_aufnr.
+  ENDLOOP.
 
-    <fs_alv>-diff = <fs_alv>-menge_real - <fs_alv>-menge_plan.
+  SORT lt_aufnr BY low.
+  DELETE ADJACENT DUPLICATES FROM lt_aufnr COMPARING low.
+
+  " Etapa 3: Busca na AFKO a quantidade confirmada (IGMNG), o material produzido (PLNBEZ)
+  "          e os dados da lista técnica vinculada (STLAL, STLAN, STLNR)
+  SELECT aufnr,
+         werks,
+         plnbez,
+         igmng,
+         stlal,
+         stlan,
+         stlnr
+    FROM afko
+    INTO TABLE @it_afko
+    WHERE aufnr  IN @lt_aufnr
+      AND gstrp  IN @s_gstrp
+      AND plnbez IN @s_matnr
+      AND werks  IN ( 'BAMO', 'CDTR', 'CFMA' ).
+
+  IF sy-subrc IS NOT INITIAL OR it_afko IS INITIAL.
+    MESSAGE 'Dados da ordem não encontrados na AFKO' TYPE 'E' DISPLAY LIKE 'S'.
+    STOP.
+  ENDIF.
+
+  SORT it_mseg BY aufnr matnr.
+  SORT it_afko BY aufnr.
+
+  " Etapa 4: Para cada ordem, explode a LT via CS_BOM_EXPL_MAT_V2
+  "          e compara o real (MSEG) com o planejado (LT)
+  DATA lt_stb      TYPE TABLE OF stpox.
+  DATA lt_matcat   TYPE TABLE OF stpovf.
+  DATA lt_mseg_ord TYPE TABLE OF ty_mseg.
+
+  LOOP AT it_afko ASSIGNING FIELD-SYMBOL(<fs_afko>).
+
+    " Filtra componentes consumidos na MSEG para esta ordem
+    CLEAR lt_mseg_ord.
+
+    LOOP AT it_mseg ASSIGNING FIELD-SYMBOL(<fs_mseg_all>)
+      WHERE aufnr = <fs_afko>-aufnr.
+      APPEND <fs_mseg_all> TO lt_mseg_ord.
+    ENDLOOP.
+
+    IF lt_mseg_ord IS INITIAL.
+      CONTINUE.
+    ENDIF.
+
+    SORT lt_mseg_ord BY matnr.
+
+    " Explosão da lista técnica vinculada à ordem
+    " Quantidades retornadas já escalonadas pela quantidade confirmada (IGMNG)
+    CLEAR: lt_stb, lt_matcat.
+
+    CALL FUNCTION 'CS_BOM_EXPL_MAT_V2'
+      EXPORTING
+        capid                 = 'PP01'
+        datuv                 = sy-datum
+        mehrs                 = 'X'
+        mtnrv                 = <fs_afko>-plnbez
+        werks                 = <fs_afko>-werks
+        stlal                 = <fs_afko>-stlal
+        stlan                 = <fs_afko>-stlan
+        menge                 = 1
+        emeng                 = <fs_afko>-igmng
+      TABLES
+        stb                   = lt_stb
+        matcat                = lt_matcat
+      EXCEPTIONS
+        alt_not_found         = 1
+        call_invalid          = 2
+        material_not_found    = 3
+        missing_authorization = 4
+        no_bom_found          = 5
+        no_plant_data         = 6
+        no_suitable_bom_found = 7
+        conversion_error      = 8
+        OTHERS                = 9.
+
+    IF sy-subrc <> 0.
+      CONTINUE.
+    ENDIF.
+
+    " Remove itens sem material (texto, variável, etc.)
+    DELETE lt_stb WHERE idnrk IS INITIAL.
+
+    SORT lt_stb BY idnrk.
+
+    " Comparação: Componentes apontados na Ordem (MSEG) x Componentes da LT (CS_BOM_EXPL_MAT_V2)
+    LOOP AT lt_mseg_ord ASSIGNING FIELD-SYMBOL(<fs_mseg>).
+
+      DATA(ls_alv) = VALUE ty_alv(
+        pwerk      = <fs_afko>-werks
+        aufnr      = <fs_afko>-aufnr
+        plnbez     = <fs_afko>-plnbez
+        idnrk      = <fs_mseg>-matnr
+        menge_real = <fs_mseg>-menge
+      ).
+
+      " Localiza o componente na lista técnica para obter a quantidade planejada
+      READ TABLE lt_stb ASSIGNING FIELD-SYMBOL(<fs_stb>)
+        WITH KEY idnrk = <fs_mseg>-matnr
+        BINARY SEARCH.
+
+      IF sy-subrc = 0.
+        ls_alv-menge_plan = <fs_stb>-menge.
+      ENDIF.
+
+      ls_alv-diff = ls_alv-menge_real - ls_alv-menge_plan.
+
+      APPEND ls_alv TO it_alv.
+
+    ENDLOOP.
+
+    " Componentes previstos na LT que não tiveram consumo registrado na MSEG
+    LOOP AT lt_stb ASSIGNING FIELD-SYMBOL(<fs_stb2>).
+
+      READ TABLE lt_mseg_ord TRANSPORTING NO FIELDS
+        WITH KEY matnr = <fs_stb2>-idnrk
+        BINARY SEARCH.
+
+      IF sy-subrc <> 0.
+
+        APPEND VALUE ty_alv(
+          pwerk      = <fs_afko>-werks
+          aufnr      = <fs_afko>-aufnr
+          plnbez     = <fs_afko>-plnbez
+          idnrk      = <fs_stb2>-idnrk
+          menge_real = 0
+          menge_plan = <fs_stb2>-menge
+          diff       = 0 - <fs_stb2>-menge
+        ) TO it_alv.
+
+      ENDIF.
+
+    ENDLOOP.
 
   ENDLOOP.
 
-  SORT it_alv BY aufnr.
+  IF it_alv IS INITIAL.
+    MESSAGE 'Nenhum dado encontrado para os parâmetros informados' TYPE 'E' DISPLAY LIKE 'S'.
+    STOP.
+  ENDIF.
+
+  SORT it_alv BY aufnr idnrk.
 
 ENDFORM.
 
@@ -141,7 +296,7 @@ FORM f_show_alv.
       cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lr_alv)
                               CHANGING t_table = it_alv[] ).
     CATCH cx_root.
-      MESSAGE 'Erro não abribuição do ALV!!' TYPE 'S' DISPLAY LIKE 'E'.
+      MESSAGE 'Erro na criação do ALV' TYPE 'S' DISPLAY LIKE 'E'.
       STOP.
   ENDTRY.
 
@@ -167,6 +322,8 @@ FORM f_show_alv.
     DATA(lo_logo) = NEW cl_salv_form_layout_logo( ).
     lo_logo->set_right_logo( 'TRVPICTURE_REC_WIZ04' ).     "TRANSAÇÃO: OAOR - PICTURES OT - Logo Buaiz
     lo_logo->set_left_content( lr_header ).
+
+    lr_alv->set_top_of_list( lo_logo ).
 
   ENDIF.
 
@@ -210,9 +367,14 @@ FORM f_show_alv.
   TRY.
 
     DATA(lr_column) = CAST cl_salv_column_table( lr_columns->get_column( 'PWERK' ) ).
-    lr_column->set_long_text( 'Centro planejado' ).
-    lr_column->set_medium_text( 'Centro plan.' ).
+    lr_column->set_long_text( 'Centro' ).
+    lr_column->set_medium_text( 'Centro' ).
     lr_column->set_short_text( 'Centro' ).
+
+    lr_column = CAST cl_salv_column_table( lr_columns->get_column( 'PLNBEZ' ) ).
+    lr_column->set_long_text( 'Material Produzido' ).
+    lr_column->set_medium_text( 'Mat. Produzido' ).
+    lr_column->set_short_text( 'Produzido' ).
 
     lr_column = CAST cl_salv_column_table( lr_columns->get_column( 'IDNRK' ) ).
     lr_column->set_long_text( 'Componente' ).
@@ -234,13 +396,11 @@ FORM f_show_alv.
     lr_column->set_medium_text( 'Diferença' ).
     lr_column->set_short_text( 'Diferença' ).
 
-
   CATCH cx_root.
   ENDTRY.
 
 *&----------------------------------------------------------------------------------------------------------*
 
-  lr_alv->set_top_of_list( lo_logo ).
   lr_alv->display( ).
 
 ENDFORM.
