@@ -21,7 +21,7 @@ TYPES: BEGIN OF ty_mseg,
 
 TYPES: BEGIN OF ty_afko,
          aufnr  TYPE aufnr,
-         werks  TYPE werks_d,
+         pwerk  TYPE werks_d,
          plnbez TYPE matnr,
          igmng  TYPE afko-igmng,
          stlal  TYPE stlal,
@@ -144,19 +144,21 @@ FORM f_select_data.
 
   " Etapa 3: Busca na AFKO a quantidade confirmada (IGMNG), o material produzido (PLNBEZ)
   "          e os dados da lista técnica vinculada (STLAL, STLAN, STLNR)
-  SELECT aufnr,
-         werks,
-         plnbez,
-         igmng,
-         stlal,
-         stlan,
-         stlnr
-    FROM afko
+  "          O centro vem de AFPO-PWERK pois AFKO não possui campo WERKS
+  SELECT DISTINCT a~aufnr,
+         b~pwerk,
+         a~plnbez,
+         a~igmng,
+         a~stlal,
+         a~stlan,
+         a~stlnr
+    FROM afko AS a
+    INNER JOIN afpo AS b ON a~aufnr = b~aufnr
     INTO TABLE @it_afko
-    WHERE aufnr  IN @lt_aufnr
-      AND gstrp  IN @s_gstrp
-      AND plnbez IN @s_matnr
-      AND werks  IN ( 'BAMO', 'CDTR', 'CFMA' ).
+    WHERE a~aufnr  IN @lt_aufnr
+      AND a~gstrp  IN @s_gstrp
+      AND b~matnr  IN @s_matnr
+      AND b~pwerk  IN ( 'BAMO', 'CDTR', 'CFMA' ).
 
   IF sy-subrc IS NOT INITIAL OR it_afko IS INITIAL.
     MESSAGE 'Dados da ordem não encontrados na AFKO' TYPE 'E' DISPLAY LIKE 'S'.
@@ -198,7 +200,7 @@ FORM f_select_data.
         datuv                 = sy-datum
         mehrs                 = 'X'
         mtnrv                 = <fs_afko>-plnbez
-        werks                 = <fs_afko>-werks
+        werks                 = <fs_afko>-pwerk
         stlal                 = <fs_afko>-stlal
         stlan                 = <fs_afko>-stlan
         menge                 = 1
@@ -230,7 +232,7 @@ FORM f_select_data.
     LOOP AT lt_mseg_ord ASSIGNING FIELD-SYMBOL(<fs_mseg>).
 
       DATA(ls_alv) = VALUE ty_alv(
-        pwerk      = <fs_afko>-werks
+        pwerk      = <fs_afko>-pwerk
         aufnr      = <fs_afko>-aufnr
         plnbez     = <fs_afko>-plnbez
         idnrk      = <fs_mseg>-matnr
@@ -262,7 +264,7 @@ FORM f_select_data.
       IF sy-subrc <> 0.
 
         APPEND VALUE ty_alv(
-          pwerk      = <fs_afko>-werks
+          pwerk      = <fs_afko>-pwerk
           aufnr      = <fs_afko>-aufnr
           plnbez     = <fs_afko>-plnbez
           idnrk      = <fs_stb2>-idnrk
