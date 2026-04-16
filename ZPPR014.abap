@@ -171,7 +171,6 @@ FORM f_select_data.
   " Etapa 4: Para cada ordem, explode a LT via CS_BOM_EXPL_MAT_V2
   "          e compara o real (MSEG) com o planejado (LT)
   DATA lt_stb      TYPE TABLE OF stpox.
-  DATA lt_matcat   TYPE TABLE OF stpovf.
   DATA lt_mseg_ord TYPE TABLE OF ty_mseg.
 
   LOOP AT it_afko ASSIGNING FIELD-SYMBOL(<fs_afko>).
@@ -192,7 +191,7 @@ FORM f_select_data.
 
     " Explosão da lista técnica vinculada à ordem
     " Quantidades retornadas já escalonadas pela quantidade confirmada (IGMNG)
-    CLEAR: lt_stb, lt_matcat.
+    CLEAR lt_stb.
 
     CALL FUNCTION 'CS_BOM_EXPL_MAT_V2'
       EXPORTING
@@ -207,7 +206,6 @@ FORM f_select_data.
         emeng                 = <fs_afko>-igmng
       TABLES
         stb                   = lt_stb
-        matcat                = lt_matcat
       EXCEPTIONS
         alt_not_found         = 1
         call_invalid          = 2
