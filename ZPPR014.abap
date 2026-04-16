@@ -202,7 +202,6 @@ FORM f_select_data.
         werks                 = <fs_afko>-pwerk
         stlal                 = <fs_afko>-stlal
         stlan                 = <fs_afko>-stlan
-        menge                 = 1
         emeng                 = <fs_afko>-igmng
       TABLES
         stb                   = lt_stb
