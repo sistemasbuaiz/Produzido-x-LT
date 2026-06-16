@@ -1,0 +1,69 @@
+===========================================================================
+ZPPR014 - Textos de Tela de Seleção e Mensagens
+Módulo PP | Comparativo Produzido Real x LT Planejado
+===========================================================================
+
+---------------------------------------------------------------------------
+TEXTOS DE BLOCO (Selection Screen Texts)
+---------------------------------------------------------------------------
+TEXT-b01 = 'Parâmetros de Seleção'
+TEXT-b02 = 'Período de Planejamento'
+TEXT-b03 = 'Status das Ordens'
+
+---------------------------------------------------------------------------
+RÓTULOS DOS PARÂMETROS
+---------------------------------------------------------------------------
+so_werks  = 'Centro(s)'
+so_matnr  = 'Material'
+so_mtart  = 'Tipo de Material'
+so_auart  = 'Tipo de Ordem'
+so_aufnr  = 'Nº da Ordem'
+so_gstrs  = 'Data Início Planejada'
+so_gltrp  = 'Data Fim Planejada'
+p_aber    = 'Abertas (CRTD)'
+p_liber   = 'Liberadas (REL)'
+p_conf    = 'Confirmadas Parcialmente (PCNF)'
+p_encr    = 'Encerradas Tecnicamente (TECO)'
+p_fech    = 'Fechadas (CLSD)'
+
+---------------------------------------------------------------------------
+CÓDIGOS DE STATUS DO SISTEMA (JEST / I-Status PP)
+---------------------------------------------------------------------------
+I0001 = CRTD  - Criada
+I0002 = REL   - Liberada
+I0010 = CNF   - Confirmada (total)
+I0009 = PCNF  - Confirmada parcialmente
+I0045 = TECO  - Encerrada tecnicamente
+I0046 = CLSD  - Fechada
+
+---------------------------------------------------------------------------
+SEMÁFORO / INDICADOR DE DESEMPENHO
+---------------------------------------------------------------------------
+G (Verde)   = Desvio de qtd <= 10% e LT dentro do planejado (var <= 0 dias)
+Y (Amarelo) = Desvio de qtd entre 10% e 20%, ou LT com variação de 1-2 dias
+R (Vermelho)= Desvio de qtd > 20% ou variação de LT > 2 dias
+
+---------------------------------------------------------------------------
+CAMPOS DO RELATÓRIO ALV - REFERÊNCIA DE TABELAS SAP
+---------------------------------------------------------------------------
+Campo       Tabela    Campo SAP    Descrição
+---------   -------   ----------   -----------------------------------
+WERKS       AFKO      WERKS        Centro de planejamento
+MATNR       AFKO      MATNR        Número do material
+MAKTX       MAKT      MAKTX        Descrição do material
+MTART       MARA      MTART        Tipo de material (FERT/HALB)
+AUFNR       AFKO      AUFNR        Número da ordem de produção
+AUART       AUFK      AUART        Tipo de ordem
+GSTRS       AFKO      GSTRS        Data início planejada (programada)
+GLTRP       AFKO      GLTRP        Data fim planejada (programada)
+FTRMS       AFKO      FTRMS        Data início real (confirmada)
+GETRS       AFKO      GETRS        Data fim real (confirmada)
+GAMNG       AFKO      GAMNG        Quantidade total planejada da ordem
+WEMNG       AFKO      WEMNG        Quantidade entrada de mercadoria (produzida)
+GMEIN       AFKO      GMEIN        Unidade de medida da ordem
+QTY_VAR     Calculado              WEMNG - GAMNG
+PCT_VAR     Calculado              (QTY_VAR / GAMNG) * 100
+DZEIT       MARC      DZEIT        Lead Time planejado em dias úteis
+LT_REAL     Calculado              GETRS - FTRMS (dias corridos)
+LT_VAR      Calculado              LT_REAL - DZEIT
+SEMAFORO    Calculado              G/Y/R por desvio de qtd e LT
